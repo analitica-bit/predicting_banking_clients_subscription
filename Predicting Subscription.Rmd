@@ -1,0 +1,248 @@
+---
+title: "Predicting bank Subscription"
+author: ""
+date: "10/05/2021"
+output: html_document
+---
+
+# Predicting Bank Subscription
+
+## Introduction
+This project uses direct marketing campaign data from a Portuguese banking institution to predict if a customer will subscribe for a term deposit or not.
+
+## PROBLEM/TASK DESCRIPTION
+We are given the data of direct marketing campaigns (phone calls) of a Portuguese banking institution. The classification goal is to predict if the client will subscribe a term deposit (target variable y). this case study for determining the success of Bank Telemarketing. The researchers in their paper have mentioned that the best result they have got was a AUC score of 0.8 and a ALIFT of 0.7. So as a goal we will try to produce a similar result in our case study.
+
+
+The data is related with direct marketing campaigns of a Portuguese banking institution. The marketing campaigns were based on phone calls. Often, more than one contact to the same client was required, in order to access if the product (bank term deposit) would be (or not) subscribed.
+
+This project has a binary classification problem. Our two classes are ‘Yes’ denoting the customer subscribed to a term deposit and ‘No’ denoting the customer that did not subscribe. 
+
+
+## Process
+We’ll be working with R’s Caret package to achieve this classification problem.
+The caret package (short for _C_lassification _A_nd _RE_gression _T_raining) is a set of functions that attempt to streamline the process for creating predictive models.
+
+
+## Data Description
+The dataset consists of direct marketing campaigns data of a banking institution. The dataset was picked from UCI Machine Learning Repository which is an amazing source for publicly available datasets. There were four variants of the datasets out of which we chose “ bank-additional-full.csv” which consists of 41188 data points with 20 independent variables out of which 10 are numeric features and 10 are categorical features.
+
+The list of features available to us are given below:
+bank client data:
+⦁	age (numeric)
+⦁	job : type of job (categorical: ‘admin.’,’blue-collar’,’entrepreneur’,’housemaid’,’management’,’retired’,’self-employed’,’services’,’student’,’technician’,’unemployed’,’unknown’)
+⦁	marital : marital status (categorical: ‘divorced’, ’married’, ’single’, ’unknown’; note: ‘divorced’ means divorced or widowed)
+⦁	education (categorical: ‘basic.4y’,’basic.6y’,’basic.9y’,’high.school’,’illiterate’,’professional.course’,’university.degree’,’unknown’)
+⦁	default: has credit in default? (categorical: ‘no’, ’yes’, ’unknown’)
+⦁	housing: has housing loan? (categorical: ‘no’, ’yes’, ’unknown’)
+⦁	loan: has personal loan? (categorical: ‘no’, ’yes’, ’unknown’)
+Related with the last contact of the current campaign:
+8. contact: contact communication type (categorical: ‘cellular’,’telephone’)
+9. month: last contact month of year (categorical: ‘jan’, ‘feb’, ‘mar’, …, ‘nov’, ‘dec’)
+10. day_of_week: last contact day of the week (categorical: ‘mon’,’tue’,’wed’,’thu’,’fri’)
+11. duration: last contact duration, in seconds (numeric). Important note: this attribute highly affects the output target (e.g., if duration=0 then y=’no’). Yet, the duration is not known before a call is performed. Also, after the end of the call y is obviously known. Thus, this input should only be included for benchmark purposes and should be discarded if the intention is to have a realistic predictive model.
+other attributes:
+12. campaign: number of contacts performed during this campaign and for this client (numeric, includes last contact)
+13. pdays: number of days that passed by after the client was last contacted from a previous campaign (numeric; 999 means client was not previously contacted)
+14. previous: number of contacts performed before this campaign and for this client (numeric)
+15. poutcome: outcome of the previous marketing campaign (categorical: ‘failure’,’nonexistent’,’success’)
+social and economic context attributes
+16. emp.var.rate: employment variation rate — quarterly indicator (numeric)
+17. cons.price.idx: consumer price index — monthly indicator (numeric)
+18. cons.conf.idx: consumer confidence index — monthly indicator (numeric)
+19. euribor3m: euribor 3 month rate — daily indicator (numeric)
+20. nr.employed: number of employees — quarterly indicator (numeric)
+
+
+
+## TASK 2
+Cleaning and preprocessing data - removing or imputing missing data, standarization, one-hot encoding, handling outliers, feature extraction, merging categories etc. (some of these points may go to part 3 if EDA/exploration was the cause of particular action)
+
+
+### Loading required packages
+```{r loadpackages}
+library(knitr)      # web widget
+library(tidyverse)  # data manipulation
+library(data.table) # fast file reading
+library(lattice)
+library(caret)      # rocr analysis
+library(ROCR)       # rocr analysis
+library(kableExtra) # nice table html formating 
+library(gridExtra)  # arranging ggplot in grid
+library(rpart)      # decision tree
+library(rpart.plot) # decision tree plotting
+library(caTools)    # split 
+library(psych)
+```
+
+### Loading the dataset
+```{r loaddata}
+read.csv("C:/Users/adeto/Documents/Statistical//bank-additional-full.csv", sep=',',header = T) # I don't think this code snippet is needful.
+
+
+# Import CSV into dataframe
+banks = read.table('C:/Users/adeto/Documents/Statistical//bank-additional-full.csv',sep=',',header = T)
+```
+
+### Observe the data
+```{r observe}
+#Get the summary of the dataset
+summary(banks)
+
+#Check for Duplicate Rows
+sum(duplicated(banks))
+
+
+#Check for missing data
+sum(!complete.cases(banks))
+```
+
+Using the introduce function, we see the number of columns, rows, and missing values:
+```{r, introducefxn}
+library(DataExplorer)
+introduce(banks)
+```
+
+#### ONE HOT ENCODING
+We noticed that some of our columns are categorical. In order to use them in our machine learning model, we have to convert them to dummy variables. This will involve converting them into zeros and ones.
+We also have to be keen to drop the first dummy variable in order to avoid the dummy variable trap. So we usually remain with N-1 dummy variables. 
+Recoding ‘yes’ to binary 1
+
+```{r OHC}
+banks$y = ifelse(banks$y=='yes',1,0)
+str(banks)
+#Size of Dataset
+nrow(banks)
+ncol(banks)
+# oUTCOME BALANCE
+prop.table(table(banks$y))
+# Observe that the dataset predicted outcome (y) is skewed towards ‘no’ with over 88%.
+```
+
+#### Graphical representaion of the y outcome
+```{r graphyoutcome}
+par(mfrow=c(2,2))
+for(i in 1:length(banks))
+  {barplot(prop.table(table(banks[,i])) , 
+           xlab=names(banks[i]), ylab= "Frequency (%)" , col = rainbow(3))}
+```
+
+
+## TASK 3
+EDA (both graphical e.g. barplots, scatterplots and descriptive e.g. tables with statistics) with focus on exploring relations between features and target variable; include correlation matrix/heatmap between numerical variables; use one of the clustering (e.g. k-means, hierarchical clustering) or dimensionality reduction technique (e.g. PCA, t-SNE, UMAP) to derive additional insight from data.
+
+```{r EDA}
+#Exploratory Data Analysis
+#Univariate Analysis
+#Age Distribution
+summary(banks$age)
+
+gg = ggplot (banks) 
+p1 = gg + geom_histogram(aes(x=age),color="black", fill="white", binwidth = 5) +
+  ggtitle('Age Distribution (red mean line)') +
+  ylab('Count') +
+  xlab('Age') +
+  geom_vline(aes(xintercept = mean(age), color = "red")) +
+  scale_x_continuous(breaks = seq(0,100,5)) +
+  theme(legend.position = "none")
+
+p2 = gg + geom_boxplot(aes(x='', y=age)) +
+  ggtitle('Age Boxplot') +
+  ylab('Age')
+
+grid.arrange(p1, p2, ncol = 2)
+```
+The bulk of clients are between the ages of 33 (1st Quartile) and 48 (3rd Quartile) with mean lying on 41 visualized on the histogram with red vertical line.
+
+Boxplot of age describes essentially the same statistics but we can see outliers above the age of 65.
+
+
+#### Age vs Description
+```{r agedescribe}
+mu <- banks %>% group_by(y) %>% summarize(grp.mean=mean(age))
+ggplot (banks, aes(x=age)) + 
+  geom_histogram(color = "blue", fill = "white", binwidth = 5) +
+  facet_grid(cols=vars(y)) + 
+  ggtitle('Age Distribution by Subscription') + ylab('Count') + xlab('Age') +
+  scale_x_continuous(breaks = seq(0,100,5)) +
+  geom_vline(data=mu, aes(xintercept=grp.mean), color="red", linetype="dashed")
+```
+
+Most clients that subscribe are between age 25 to 45. Mean age for all clients is above 40 years of age.
+
+#### Age Distribution vs Marital Status That Subscribes Term Deposit
+
+```{r agevsmaritalstatus}
+p3 <- ggplot(banks, aes(x=age, fill=marital)) + 
+  geom_histogram(binwidth = 2, alpha=0.7) +
+  facet_grid(cols = vars(y)) +
+  expand_limits(x=c(0,100)) +
+  scale_x_continuous(breaks = seq(0,100,10)) +
+  ggtitle("Age Distribution by Marital Status"); p3
+```
+
+The bulk of clients are married or divorced. Sharp drop of clients above age 60 with marital status ‘divorced’ and ‘married’. *Single clients drop in numbers above age 40.
+
+#### Education vs Subscription
+
+```{r eduvssub}
+ggplot(data = banks, aes(x=education, fill=y)) +
+         geom_bar() +
+         ggtitle("Term Deposit Subscription based on Education Level") + xlab(" Education Level") +
+         guides(fill=guide_legend(title="Subscription of Term Deposit"))
+
+```
+Having Higher degree seen to contribute to higher subscription of term deposit. Most clients who subscribe are from ‘high school’ and ‘university’ education levels. Tertiary educated clients have higher rate of subscription (15%) from total clients called.
+
+Deposit
+```{r deposit}
+mu2 <- banks %>% group_by(y) %>% summarize(grp2.mean=mean(duration))
+p6 <- ggplot(banks, aes(x=duration, fill = y)) +
+  geom_histogram(binwidth = 2) +
+  facet_grid(cols = vars(y)) +
+  coord_cartesian(xlim = c(0,5000), ylim = c(0,400))
+
+p6 + geom_vline(data = mu2, aes(xintercept = grp2.mean), color = "red", linetype = "dashed")
+
+```
+
+#### Scatterplot of Duration by Age
+
+Less clients after age of 60. Duration during call looks similar.
+
+
+```{r agevsdur}
+banks %>% 
+  ggplot(aes(age, duration)) +
+  geom_point() +
+  facet_grid(cols = vars(y)) +
+  scale_x_continuous(breaks = seq(0,100,10)) +
+  ggtitle("Scatterplot of Duration vs Age for Subscription of Term Deposit")
+
+```
+
+
+####Scatterplot of Duration by Campaign
+
+```{r scatterplot1}
+banks %>% filter(campaign < 63) %>% 
+  ggplot(aes(campaign, duration)) +
+  geom_point() +
+  facet_grid(cols = vars(y)) +
+  ggtitle("Scatterplot of Duration vs Campaign for Subscription of Term Deposit")
+```
+
+Duration on call similar for first 10 contacts during campaign. Successful subscription (y=1) occur within first 10 contacts. Much less after that.
+
+### Correlation analysis
+It emphasize on what we say using box plot, It can tell if predictor is a good predictor or not a good predictor.
+
+This analysis can help us decide if we can drop some columns/predictors depending upon its correlation with the outcome variable.
+
+```{r}
+pairs.panels(banks[, c(1:8,17)])
+
+```
+
+## Creating Models
+Create models (at least 3 distinct types of models) and tune hyperparameters for each model.
